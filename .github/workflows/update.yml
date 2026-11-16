@@ -1,0 +1,25 @@
+name: update-earnings
+on:
+  schedule:
+    - cron: "30 22 * * *"   # 毎日 日本時間 7:30
+  workflow_dispatch:         # 手動実行ボタン
+  push:
+    paths: ["watchlist.json"]  # 銘柄を編集したら即更新
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/fetch_earnings.py
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+      - run: |
+          git config user.name "earnings-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add docs/data.json
+          git diff --cached --quiet || (git commit -m "update data" && git push)
