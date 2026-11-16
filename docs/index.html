@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>決算日ダッシュボード</title>
+<style>
+:root{--bg:#eef1f5;--sf:#fff;--ink:#14213d;--sub:#5b6577;--line:#d5dbe5;--ac:#1d4ed8;--hot:#c2410c;--hotbg:#ffedd5;--hold:#0f766e;--watch:#7c3aed;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1420;--sf:#171f2e;--ink:#e8edf6;--sub:#9aa6bb;--line:#2b3548;--ac:#6c9bff;--hot:#fb923c;--hotbg:#3a2412;--hold:#2dd4bf;--watch:#a78bfa}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;line-height:1.6;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:720px;margin:0 auto;padding:16px 14px 48px}
+h1{font-size:20px;margin:4px 0 2px}.sub{color:var(--sub);font-size:12px;margin:0 0 12px}
+.card{background:var(--sf);border:1px solid var(--line);border-radius:10px;padding:12px}
+button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.sp{flex:1}
+.row{display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center;margin-bottom:8px}
+.cd{text-align:center;line-height:1}.cd b{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums}
+.cd small{display:block;font-size:11px;color:var(--sub);margin-top:4px}
+.row.soon{border-color:var(--hot);background:var(--hotbg)}.row.soon .cd b{color:var(--hot)}
+.row.past,.row.none{opacity:.6}
+.nm{font-weight:700}.meta{font-size:12px;color:var(--sub)}
+.tag{display:inline-block;font-size:11px;border:1px solid currentColor;border-radius:99px;padding:0 7px;margin-right:6px}
+.tag.hold{color:var(--hold)}.tag.watch{color:var(--watch)}
+.ch{display:flex;align-items:center;gap:8px;margin-bottom:8px}.ch b{flex:1;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.dow{text-align:center;font-size:11px;color:var(--sub)}
+.cell{min-height:58px;border:1px solid var(--line);border-radius:6px;padding:2px;font-size:11px;overflow:hidden}
+.cell.today{border:2px solid var(--ac)}.cell .d{color:var(--sub)}
+.chip{display:block;border-radius:4px;padding:0 3px;margin-top:1px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
+.chip.hold{background:var(--hold)}.chip.watch{background:var(--watch)}
+</style>
+</head>
+<body>
+<main>
+<h1>決算日ダッシュボード</h1>
+<p class="sub" id="upd">読み込み中…</p>
+<div class="bar">
+  <button data-view="list" aria-pressed="true">リスト</button>
+  <button data-view="cal" aria-pressed="false">カレンダー</button>
+  <span class="sp"></span>
+  <button data-f="all" aria-pressed="true">すべて</button>
+  <button data-f="hold" aria-pressed="false">保有</button>
+  <button data-f="watch" aria-pressed="false">監視</button>
+</div>
+<div id="out"></div>
+</main>
+<script>
+var items=[],view="list",filt="all",cur=new Date();cur.setDate(1);
+var LABEL={manual:"手入力",tbd:"未定",none:"予定なし",error:"取得エラー"};
+function mid(s){var p=s.split("-");return new Date(+p[0],+p[1]-1,+p[2])}
+function today(){var n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())}
+function days(s){return Math.round((mid(s)-today())/864e5)}
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function shown(){
+  return items.filter(function(i){return filt==="all"||i.kind===filt}).sort(function(a,b){
+    if(!a.date&&!b.date)return 0;if(!a.date)return 1;if(!b.date)return -1;
+    var da=days(a.date),db=days(b.date),pa=da<0,pb=db<0;
+    if(pa!==pb)return pa?1:-1;return a.date<b.date?-1:a.date>b.date?1:0});
+}
+function row(i){
+  var d=i.date?days(i.date):null,cls=d===null?"none":d<0?"past":d<=7?"soon":"";
+  var big=d===null?"—":d<0?"済":d===0?"今日":d,unit=d===null?(LABEL[i.status]||""):d<0?"発表済み":d===0?"":"日後";
+  var info=i.date?i.date+"（"+"日月火水木金土"[mid(i.date).getDay()]+"）"+(i.fq?" "+i.fq:"")+(LABEL[i.status]&&i.status!=="none"?" ・"+LABEL[i.status]:""):"日付なし";
+  return '<div class="card row '+cls+'"><div class="cd"><b>'+big+'</b><small>'+unit+'</small></div><div><div class="nm">'+esc(i.name)+'</div><div class="meta"><span class="tag '+i.kind+'">'+(i.kind==="hold"?"保有":"監視")+'</span>'+esc(i.code)+'</div><div class="meta">'+esc(info)+'</div></div></div>';
+}
+function cal(list){
+  var y=cur.getFullYear(),m=cur.getMonth(),first=new Date(y,m,1).getDay(),n=new Date(y,m+1,0).getDate(),t=iso(today());
+  var h='<div class="card"><div class="ch"><button data-m="-1" aria-label="前の月">‹</button><b>'+y+'年'+(m+1)+'月</b><button data-m="1" aria-label="次の月">›</button></div><div class="grid">';
+  "日月火水木金土".split("").forEach(function(w){h+='<div class="dow">'+w+'</div>'});
+  for(var k=0;k<first;k++)h+="<div></div>";
+  for(var d=1;d<=n;d++){
+    var s=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    var chips=list.filter(function(i){return i.date===s}).map(function(i){return '<span class="chip '+i.kind+'">'+esc(i.name)+'</span>'}).join("");
+    h+='<div class="cell'+(s===t?" today":"")+'"><span class="d">'+d+'</span>'+chips+'</div>';
+  }
+  return h+"</div></div>";
+}
+function render(){
+  var out=document.getElementById("out"),list=shown();
+  out.innerHTML=!list.length?'<div class="card">表示する銘柄がありません。</div>':view==="list"?list.map(row).join(""):cal(list);
+}
+document.addEventListener("click",function(e){
+  var b=e.target.closest("button");if(!b)return;
+  if(b.dataset.view){view=b.dataset.view;document.querySelectorAll("[data-view]").forEach(function(x){x.setAttribute("aria-pressed",x===b)})}
+  else if(b.dataset.f){filt=b.dataset.f;document.querySelectorAll("[data-f]").forEach(function(x){x.setAttribute("aria-pressed",x===b)})}
+  else if(b.dataset.m){cur.setMonth(cur.getMonth()+ +b.dataset.m)}
+  render();
+});
+fetch("data.json?t="+Date.now()).then(function(r){return r.json()}).then(function(d){
+  items=d.items||[];
+  document.getElementById("upd").textContent="最終更新 "+d.updated+"（毎朝自動更新）　予定日は変更されることがあります";
+  render();
+}).catch(function(){document.getElementById("upd").textContent="data.json を読み込めませんでした。Actionsを一度実行してください。"});
+</script>
+</body>
+</html>
