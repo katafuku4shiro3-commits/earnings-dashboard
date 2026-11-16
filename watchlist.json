@@ -1,0 +1,5 @@
+[
+  {"code": "7203", "name": "トヨタ自動車", "kind": "hold"},
+  {"code": "8697", "name": "日本取引所グループ", "kind": "watch"},
+  {"code": "9999", "name": "手入力の例", "kind": "watch", "manual_date": "2026-12-25"}
+]
